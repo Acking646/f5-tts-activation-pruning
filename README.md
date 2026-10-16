@@ -1,4 +1,4 @@
-# CAR-TTS
+# F5-TTS Activation Pruning
 
 基于 **F5-TTS v1** 的真实语音复现、微调、推理评测与激活引导结构化裁剪项目。它把 EMNLP 2025 Findings 论文 *Unveiling Multimodal Processing: Exploring Activation Patterns in Multimodal LLMs for Interpretability and Efficiency* 中“稠密 FFN → 细粒度专家 → 激活频率 → 全局非均匀裁剪”的思路迁移到 TTS DiT，并把结果约束在可复核的 RTF、质量和盲听协议上。
 
@@ -56,8 +56,8 @@ docs/
 建议 Linux + Python 3.10/3.11 + NVIDIA GPU；先按自己的 CUDA 版本安装 PyTorch，再安装本项目。
 
 ```bash
-git clone https://github.com/Acking646/car-tts.git
-cd car-tts
+git clone https://github.com/Acking646/f5-tts-activation-pruning.git
+cd f5-tts-activation-pruning
 python -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
@@ -175,4 +175,3 @@ car-tts mos-aggregate artifacts/mos/ratings.csv artifacts/mos/trials.jsonl
 - Jungil Kong et al. [HiFi-GAN](https://proceedings.neurips.cc/paper/2020/hash/c5d736809766d46260d816d8dbc9eb44-Abstract.html). NeurIPS 2020.
 
 本仓库没有复制 F5-TTS 权重或源码；运行时通过其公开 Python API 调用，并保留清楚的上游归属。
-
