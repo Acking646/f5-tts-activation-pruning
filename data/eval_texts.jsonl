@@ -1,0 +1,6 @@
+{"id":"zh_short","category":"short","text":"前方道路施工，请减速慢行。","ref_audio":"data/private/reference.wav","ref_text":"这是用于克隆音色的参考语音。"}
+{"id":"zh_number","category":"number","text":"导航显示，距离目的地还有12.5公里，预计10点30分到达。","ref_audio":"data/private/reference.wav","ref_text":"这是用于克隆音色的参考语音。"}
+{"id":"zh_mixed","category":"mixed_language","text":"请连接 Bluetooth，并将空调调至 twenty-two 摄氏度。","ref_audio":"data/private/reference.wav","ref_text":"这是用于克隆音色的参考语音。"}
+{"id":"zh_long","category":"long","text":"车辆即将驶入连续弯道路段，请保持安全车距，不要急加速或急刹车，并留意右侧汇入车辆。","ref_audio":"data/private/reference.wav","ref_text":"这是用于克隆音色的参考语音。"}
+{"id":"zh_punctuation","category":"punctuation","text":"注意：不是左转——是前方掉头；确认安全后，再继续行驶。","ref_audio":"data/private/reference.wav","ref_text":"这是用于克隆音色的参考语音。"}
+

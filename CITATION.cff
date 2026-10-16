@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this reproduction, cite this repository and the upstream papers."
+title: "CAR-TTS: activation-guided F5-TTS reproduction and evaluation"
+type: software
+authors:
+  - family-names: "Li"
+    given-names: "Jiahe"
+repository-code: "https://github.com/Acking646/car-tts"
+license: MIT
+version: 0.1.0
+date-released: 2026-10-16
+references:
+  - type: article
+    title: "F5-TTS: A Fairytaler that Fakes Fluent and Faithful Speech with Flow Matching"
+  - type: article
+    title: "Unveiling Multimodal Processing: Exploring Activation Patterns in Multimodal LLMs for Interpretability and Efficiency"
+
