@@ -1,7 +1,8 @@
 # Install the project itself first: pip install -e .
 # The official F5-TTS runtime is optional because CI/data tooling does not need GPU dependencies.
 f5-tts==1.1.16
-torch>=2.1
+torch>=2.6,<2.7
+torchaudio>=2.6,<2.7
 soundfile>=0.12
-numpy==1.26.4
+numpy==2.2.6
 tqdm>=4.66

@@ -30,14 +30,14 @@ python -m pip install --upgrade pip setuptools wheel
 当前 566.24 驱动不建议直接使用官方示例中的 CUDA 12.8 wheel。先使用 F5-TTS README 同样列出的 CUDA 12.4 路线：
 
 ```powershell
-python -m pip install torch==2.4.0+cu124 torchaudio==2.4.0+cu124 `
-  --extra-index-url https://download.pytorch.org/whl/cu124
-python -m pip install --force-reinstall numpy==1.26.4
+python -m pip install torch==2.6.0 torchaudio==2.6.0 `
+  --index-url https://download.pytorch.org/whl/cu124
+python -m pip install --force-reinstall numpy==2.2.6
 cd C:\Users\LENOVO\Desktop\tts\code
 python -m pip install -e ".[tts]"
 ```
 
-PyTorch 2.4.0 的 Windows wheel 使用 NumPy 1.x ABI；若环境中已有 NumPy 2.x，会出现 `_ARRAY_API not found`。这里显式固定 1.26.4，避免导入警告和潜在崩溃。
+当前 Transformers 要求 PyTorch 2.6 或更高，而当前 PyArrow wheel 要求 NumPy 2.x。这里将兼容组合固定为 PyTorch/Torchaudio 2.6.0 + CUDA 12.4、NumPy 2.2.6；不要与 PyTorch 2.4 + NumPy 1.26 的旧组合混用。
 
 验证环境：
 
