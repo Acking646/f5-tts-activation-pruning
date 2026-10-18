@@ -1,187 +1,244 @@
 # F5-TTS Activation Pruning
 
-基于 **F5-TTS v1** 的真实语音复现、微调、推理评测与激活引导结构化裁剪项目。它把 EMNLP 2025 Findings 论文 *Unveiling Multimodal Processing: Exploring Activation Patterns in Multimodal LLMs for Interpretability and Efficiency* 中“稠密 FFN → 细粒度专家 → 激活频率 → 全局非均匀裁剪”的思路迁移到 TTS DiT，并把结果约束在可复核的 RTF、质量和盲听协议上。
+这是一个基于 F5-TTS v1 的结构化剪枝实验。具体做法是：先统计 DiT 中 FFN 神经元的激活情况，再按统计结果缩小 FFN 的两层线性矩阵，最后在同一台 GPU 上测端到端 RTF。
+
+项目目前已经跑通官方预训练模型、激活 profile、global/equal/random 三种裁剪和保留率扫描。微调、WER 和人工 MOS 还没有完成，因此下面只报告已经实际测过的参数量和速度。
 
 ![F5-TTS Activation-Guided Structured Pruning](docs/assets/f5_tts_activation_pruning_framework.png)
 
-图 1：本项目框架。左侧复现 F5-TTS 推理并采集 DiT FFN 的 post-GELU 激活；中间完成平衡专家聚类与跨层频率统计；右侧比较 global/equal/random 结构化裁剪，并在相同测试条件下联合报告 RTF 与语音质量。该图依据本仓库实现重绘，不代表 F5-TTS 原论文的实验结论。
+图中左侧是 F5-TTS 推理与激活采集，中间是专家划分和保留策略，右侧是结构化裁剪后的推理评测。它描述的是本仓库的实现，不是 F5-TTS 原论文中的实验结果。
 
-> 当前仓库已经完成工程实现、单元测试和本机 GPU 基线/裁剪验证集 RTF；尚未完成 GPU 微调、客观语音质量评测或人工 MOS。已测数值和未完成边界见 `docs/RESULTS.md`。
+## 实验结果
 
-## 为什么选 F5-TTS
+测试环境：RTX 4060 Laptop GPU、Python 3.11.11、PyTorch 2.6.0+cu124、CUDA 12.4、F5-TTS v1 Base、Vocos、NFE 32。每组先预热 1 次，再把 10 条验证文本完整运行 3 轮。RTF 包含文本处理、声学模型、Vocos 和 WAV 写盘，不包含模型加载。
 
-检索与对比了当前开源中文/多语种方案：
+| 配置 | FFN 实际保留率 | 总参数量 | 参数减少 | RTF（3 轮均值 ± 标准差） | 相对基线加速 |
+|---|---:|---:|---:|---:|---:|
+| 未裁剪基线 | 100% | 337,096,804 | 0% | 0.307948 ± 0.002683 | 1.000× |
+| global-90 | 89.99% | 327,851,716 | 2.743% | 0.300732 ± 0.000436 | 1.024× |
+| global-80 | 79.97% | 318,606,628 | 5.485% | 0.293995 ± 0.000737 | 1.047× |
+| global-70 | 70.03% | 309,427,108 | 8.208% | 0.286624 ± 0.001598 | 1.074× |
+| random-80 | 79.97% | 318,606,628 | 5.485% | 0.294057 ± 0.001029 | 1.047× |
+| equal-80 | 79.69% | 318,344,356 | 5.563% | 0.297101 ± 0.003921 | 1.037× |
 
-| 项目 | 公开时间/定位 | 本项目取舍 |
-|---|---|---|
-| [F5-TTS](https://github.com/SWivid/F5-TTS) | ACL 2025，非自回归 flow matching；官方含微调、评测和 TensorRT-LLM 路径 | **采用**。DiT 中有规则的 FFN，适合把论文的专家激活分析迁移过来；官方 v1 也便于复现 |
-| [CosyVoice 3](https://github.com/FunAudioLLM/CosyVoice) | 2025，多语种 zero-shot、流式与 post-training | 质量和工程能力强，但链路更复杂，不利于先把个人改动和裁剪因果讲清楚 |
-| [IndexTTS2](https://github.com/index-tts/index-tts) | 2025，自回归、情感与时长可控 | 适合情感/时长控制项目，不是当前 FFN 稀疏化实验的最小可复现基线 |
-| [VITS](https://github.com/jaywalnut310/vits) | 经典单阶段 TTS | 适合学习 VAE、flow、对齐与 GAN；但不是“最新项目”，也不能再写成“VITS 外接 HiFi-GAN” |
+global 的保留率从 90% 降到 70% 时，参数量和 RTF 都单调下降。global-70 的端到端 RTF 比未裁剪基线低 6.92%，对应约 1.074 倍吞吐加速。
 
-F5-TTS 论文报告的是论文设置结果，官方仓库也列出 PyTorch 与 TensorRT 路径的示例 RTF；它们都不是本仓库的实测结果。本项目要求在自己的硬件上重新运行并提交逐条记录。
+global-80 和 random-80 使用完全相同的逐层宽度，所以参数量与速度接近是正常的。两者真正要比较的是语音质量：如果激活排序有效，global 应该在 WER、音色或自然度上优于随机选择。当前尚未完成这部分评测，不能仅凭 RTF 宣称 global 优于 random。
 
-## 做了什么
+另有一组 15 条测试文本的未裁剪基线，RTF 为 `0.304825 ± 0.000950`。它没有参与保留率选择。完整记录见 [docs/RESULTS.md](docs/RESULTS.md)，计时和数据划分见 [docs/PROTOCOL.md](docs/PROTOCOL.md)。
 
-- 真实语音数据入口：检查 WAV、时长、重复 ID/文本，以 `speaker/source_recording` 分组划分，降低相邻切片泄漏。
-- 官方 F5-TTS v1 推理封装：固定参考音频、参考文本、seed、NFE 和 speed。
-- 严谨 RTF：预热、CUDA 同步、逐条 latency/音频时长、总耗时除以总音频时长、软硬件环境快照。
-- 可复核 MOS：生成匿名随机 trial，校验 1–5 自然度评分，汇总评分数、听者数、均值和标准差。
-- 论文迁移：对 F5-TTS DiT FFN 第一投影权重做平衡 K-means，记录 GELU 后专家激活并进行层内 Z-score、跨层 top-K。
-- 三个裁剪策略：`global` 跨层非均匀保留、`equal` 每层等比例保留，以及与 global 逐层宽度匹配的 `random` 随机对照。
-- 结构化裁剪：同时缩小 FFN 的两层线性矩阵，实际减少参数和矩阵乘；不把零掩码或“活跃参数下降”冒充真实加速。
-- 完整产物：profile、mask、逐条 benchmark、固定测试文本、盲听原始记录和结果表模板。
+## 裁剪方法
 
-## 项目结构
+F5-TTS v1 Base 的 DiT 包含 22 个 FFN block，每层中间维度为 2048。本项目在每层做以下处理：
+
+1. 根据第一层线性投影的权重方向，把 2048 个神经元平衡划分成 64 个专家，每个专家包含 32 个神经元。
+2. 在独立的 profile 文本上记录 post-GELU 激活，统计每个专家的活跃频率。
+3. 根据策略选择要保留的专家。
+4. 同时裁掉 FFN 输入投影的输出行和输出投影的输入列，生成更小的真实矩阵。
+
+三种策略的用途不同：
+
+- `global`：把所有层的专家放在一起排序，允许不同层保留不同宽度。
+- `equal`：每层保留相同比例，用来判断跨层非均匀分配是否有作用。
+- `random`：沿用 global 的逐层宽度，但随机选择层内专家，用来判断激活排序是否优于随机选择。
+
+这里做的是 profile 后的静态结构化裁剪，不是推理时动态 MoE。代码实际缩小矩阵，不使用零掩码代替加速。
+
+## 数据划分
+
+仓库里的英文车载文本分成三份：
+
+| 文件 | 数量 | 用途 |
+|---|---:|---|
+| `data/profile_texts_en.jsonl` | 15 | 收集专家激活，只生成一次 profile |
+| `data/validation_texts_en.jsonl` | 10 | 比较保留率和裁剪策略 |
+| `data/eval_texts_en.jsonl` | 15 | 配置确定后的最终测试 |
+
+profile、validation 和 eval 不能混用。最终测试集不应被拿来反复选择保留率。
+
+清单默认引用 `data/private/basic_ref_en.wav`。该参考音频以及模型权重不提交到仓库，需要自行准备。
+
+## 安装
+
+已经验证的本机环境是 Windows、Python 3.11 和 CUDA 12.4。详细安装过程见 [docs/BASELINE_SETUP.md](docs/BASELINE_SETUP.md)。安装项目本身：
+
+```powershell
+python -m pip install -e ".[tts,test]"
+python -m pytest -q
+```
+
+本次实验使用的本地文件结构：
 
 ```text
-src/car_tts/
-  backend.py       # F5-TTS/CI mock 后端
-  dataset.py       # 清洗、分组划分、F5 metadata.csv
-  benchmark.py     # 端到端 RTF
-  experts.py       # 平衡聚类、激活统计、global/equal/random 结构化裁剪
-  mos.py           # 盲听 trial 与汇总
-scripts/
-  finetune.ps1
-  profile_experts.py
-  prune_benchmark.py
-data/
-  manifest.example.jsonl
-  eval_texts.jsonl
-docs/
-  PROTOCOL.md
-  RESULTS.md
+checkpoints/
+  F5TTS_v1_Base/
+    model_1250000.safetensors
+    vocab.txt
+  vocos-mel-24khz/
+data/private/
+  basic_ref_en.wav
 ```
 
-根目录保留的 `llava-*` 与 `Omni-*` 脚本是论文早期 MLLM 实验材料，不属于 F5-TTS 运行链路；新的迁移实现集中在 `src/car_tts/experts.py`，以免把多模态理解代码误称为 TTS 代码。
+在 PowerShell 中先设置路径：
 
-## 1. 安装
-
-建议 Linux + Python 3.10/3.11 + NVIDIA GPU；先按自己的 CUDA 版本安装 PyTorch，再安装本项目。
-
-当前 Windows + RTX 4060 Laptop 的逐步安装、模型下载、参考音频和微调数据准备见 [`docs/BASELINE_SETUP.md`](docs/BASELINE_SETUP.md)。
-
-```bash
-git clone https://github.com/Acking646/f5-tts-activation-pruning.git
-cd f5-tts-activation-pruning
-python -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -e ".[tts,test]"
-pytest -q
+```powershell
+$ckpt = (Resolve-Path "checkpoints\F5TTS_v1_Base\model_1250000.safetensors").Path
+$vocab = (Resolve-Path "checkpoints\F5TTS_v1_Base\vocab.txt").Path
+$vocoder = (Resolve-Path "checkpoints\vocos-mel-24khz").Path
 ```
 
-Windows PowerShell 激活命令为 `.\.venv\Scripts\Activate.ps1`。第一次真实推理会由 F5-TTS 下载官方权重；模型许可证、语料许可证和生成语音使用边界以其上游说明为准。
+## 复现实验
 
-## 2. 准备真实语音数据
+### 1. 未裁剪验证基线
 
-不要把私人录音或无再分发许可的数据提交到 Git。将音频放进已忽略的 `data/private/`，按 `data/manifest.example.jsonl` 建清单：
+```powershell
+car-tts benchmark `
+  "data\validation_texts_en.jsonl" `
+  "outputs\validation-baseline" `
+  --checkpoint "$ckpt" `
+  --vocab "$vocab" `
+  --vocoder "$vocoder" `
+  --warmup 1 `
+  --repeats 3 `
+  --nfe-step 32 `
+  --seed 42 `
+  --device cuda
+```
+
+结果保存在 `outputs/validation-baseline/benchmark.json`，里面包含三轮汇总、逐条 latency、音频时长和运行环境。
+
+### 2. 收集专家激活
+
+```powershell
+python scripts\profile_experts.py `
+  "data\profile_texts_en.jsonl" `
+  "artifacts\expert_profile_en.json" `
+  --model F5TTS_v1_Base `
+  --checkpoint "$ckpt" `
+  --vocab "$vocab" `
+  --vocoder "$vocoder" `
+  --experts 64 `
+  --top-fraction 0.20 `
+  --nfe-step 32 `
+  --seed 42 `
+  --device cuda
+```
+
+后续所有策略和保留率共用这个 profile，不要分别重新采集。
+
+### 3. 运行 80% 三策略对照
+
+```powershell
+foreach ($strategy in @("global", "random", "equal")) {
+    python scripts\prune_benchmark.py `
+      "artifacts\expert_profile_en.json" `
+      "data\validation_texts_en.jsonl" `
+      "outputs\validation-$strategy-80" `
+      --model F5TTS_v1_Base `
+      --checkpoint "$ckpt" `
+      --vocab "$vocab" `
+      --vocoder "$vocoder" `
+      --retain 0.8 `
+      --strategy $strategy `
+      --warmup 1 `
+      --repeats 3 `
+      --nfe-step 32 `
+      --seed 42 `
+      --device cuda
+}
+```
+
+每个目录都会生成 `prune_benchmark.json`、`expert_masks.json` 和对应 WAV。
+
+### 4. 扫描 global 保留率
+
+```powershell
+foreach ($retain in @(0.9, 0.7)) {
+    $tag = [int]($retain * 100)
+
+    python scripts\prune_benchmark.py `
+      "artifacts\expert_profile_en.json" `
+      "data\validation_texts_en.jsonl" `
+      "outputs\validation-global-$tag" `
+      --model F5TTS_v1_Base `
+      --checkpoint "$ckpt" `
+      --vocab "$vocab" `
+      --vocoder "$vocoder" `
+      --retain $retain `
+      --strategy global `
+      --warmup 1 `
+      --repeats 3 `
+      --nfe-step 32 `
+      --seed 42 `
+      --device cuda
+}
+```
+
+## 数据准备与微调
+
+自己的语音数据使用 JSONL 清单管理：
 
 ```json
 {"id":"speaker01_0001","audio":"private/wavs/0001.wav","text":"今天天气很好。","speaker":"speaker01","source_recording":"session01"}
 ```
 
-运行：
-
-```bash
-car-tts prepare data/my_manifest.jsonl artifacts/dataset --seed 42
+```powershell
+car-tts prepare data\my_manifest.jsonl artifacts\dataset --seed 42
 ```
 
-产物包括 `train.jsonl`、`valid.jsonl`、`test.jsonl`、`rejected.jsonl` 和供官方 F5-TTS 预处理器使用的 `metadata.csv`。必须人工检查转写、长静音、爆音、截断、采样率和授权；自动脚本不能替代听检。
+数据准备会检查路径、时长和重复项，并按 `speaker/source_recording` 分组划分，减少同一录音切片跨集合泄漏。它不能代替人工检查转写、静音、爆音、截断和授权。
 
-## 3. 复现官方推理基线
+F5-TTS 微调入口封装在 `scripts/finetune.ps1`。目前仓库没有提交微调 checkpoint，也没有把未运行的微调结果写进表格。
 
-准备 3–10 秒干净参考音频，修改 `data/eval_texts.jsonl` 中的 `ref_audio/ref_text`：
+## MOS 工具
 
-```bash
-car-tts infer \
-  --ref-audio data/private/reference.wav \
-  --ref-text "这是用于克隆音色的参考语音。" \
-  --text "前方道路施工，请减速慢行。" \
-  --output outputs/demo.wav
-
-car-tts benchmark data/eval_texts.jsonl outputs/baseline \
-  --warmup 1 --repeats 3 --nfe-step 32 --seed 42
-```
-
-主指标包含 WAV 写盘，是端到端 RTF；模型加载不计入。若要报告模型-only RTF，需要另设清晰计时边界，不能与本结果混写。
-
-## 4. 微调
-
-官方预处理入口要求 `audio_file|text` 两列。先运行第 2 步，再在安装了 F5-TTS 的环境执行：
+仓库提供了简单的匿名化和评分汇总命令：
 
 ```powershell
-.\scripts\finetune.ps1 `
-  -DatasetName car_voice_pinyin `
-  -MetadataCsv (Resolve-Path artifacts/dataset/metadata.csv) `
-  -LearningRate 0.00001 -Epochs 10 -BatchFrames 1600
-```
+car-tts mos-create `
+  --system baseline=artifacts/mos/baseline.jsonl `
+  --system pruned=artifacts/mos/pruned.jsonl `
+  --output artifacts/mos/trials.jsonl `
+  --seed 42
 
-`BatchFrames` 必须按显存调整。训练前记录上游 F5-TTS 版本、官方 checkpoint 来源和哈希；训练后保留 TensorBoard、每个 split 的条数/时长、超参数、最佳 checkpoint 的选择依据。小数据说话人适配效果取决于录音质量和覆盖度，仓库不预先承诺提升。
-
-## 5. 从论文迁移专家激活分析
-
-先在固定、覆盖短句/长句/数字/中英混合/标点的清单上采集 profile：
-
-```bash
-python scripts/profile_experts.py data/eval_texts.jsonl artifacts/expert_profile.json \
-  --experts 64 --top-fraction 0.20 --nfe-step 32 --seed 42
-```
-
-然后在同一清单、硬件、精度和参数下做结构化裁剪：
-
-```bash
-python scripts/prune_benchmark.py \
-  artifacts/expert_profile.json data/eval_texts.jsonl outputs/pruned-global \
-  --retain 0.80 --strategy global --warmup 1 --repeats 3
-
-python scripts/prune_benchmark.py \
-  artifacts/expert_profile.json data/eval_texts.jsonl outputs/pruned-equal \
-  --retain 0.80 --strategy equal --warmup 1 --repeats 3
-
-python scripts/prune_benchmark.py \
-  artifacts/expert_profile.json data/eval_texts.jsonl outputs/pruned-random \
-  --retain 0.80 --strategy random --warmup 1 --repeats 3 --seed 42
-```
-
-必须再与未裁剪基线比较 CER/WER、说话人相似度和盲听。若 RTF 未下降，应如实分析 attention、ODE、声码器、kernel shape 与 I/O 占比；不能只依据参数量得出“推理加速”。结构裁剪后的 `state_dict` 需要配套裁剪结构才能重新加载，不能直接塞回官方原始配置。
-
-## 6. 小规模自然度盲听
-
-先把各系统输出整理为 JSONL，每行至少有同一 `id` 和 `audio`：
-
-```bash
-car-tts mos-create \
-  --system baseline=artifacts/mos/baseline.jsonl \
-  --system finetuned=artifacts/mos/finetuned.jsonl \
-  --system pruned=artifacts/mos/pruned.jsonl \
-  --output artifacts/mos/trials.jsonl --seed 42
-```
-
-隐藏 `system` 字段后把 `trial_id/audio` 提供给听者，收集 `listener_id,trial_id,naturalness`，然后：
-
-```bash
 car-tts mos-aggregate artifacts/mos/ratings.csv artifacts/mos/trials.jsonl
 ```
 
-本工具是小规模实验的数据骨架，不自动使实验满足正式 MOS 规范。完整口径见 `docs/PROTOCOL.md`，主观语音质量测试可参考 [ITU-T P.800](https://www.itu.int/rec/T-REC-P.800/en)。
+这只是记录和汇总工具，不代表当前已经完成 MOS。正式结论还需要足够的听者、随机顺序、统一播放条件和原始评分记录。
 
-## 结果与可写进简历的边界
+## 目录
 
-只有在实际跑完相应阶段后再写：
+```text
+src/car_tts/
+  backend.py       F5-TTS 推理封装
+  benchmark.py     RTF 计时与结果记录
+  dataset.py       数据检查和分组划分
+  experts.py       专家聚类、激活统计和结构化裁剪
+  mos.py           盲听清单与评分汇总
+scripts/
+  profile_experts.py
+  prune_benchmark.py
+  finetune.ps1
+docs/
+  BASELINE_SETUP.md
+  PROTOCOL.md
+  RESULTS.md
+```
 
-- 跑通官方权重：`完成 F5-TTS v1 预训练模型推理复现与固定测试集评测`。
-- 有参数更新、日志和 checkpoint：`在自建/授权的 X 小时语料上完成说话人微调`。
-- 有同机基线和逐条记录：`端到端 RTF 从 X 降至 Y`。
-- 有匿名听测原始记录：`N 名听者、M 条语音的小规模自然度 MOS 为 X±Y`。
+## 当前缺项
 
-目前准确表述是：`实现 F5-TTS 数据清洗、微调入口、RTF/MOS 评测与基于 FFN 激活频率的结构化裁剪实验框架；4 项自动化测试通过。` 不应写 TensorFlow、QLoRA、DPO/GRPO、ONNX 或 TensorRT，除非后续确实实现并评测。
+- baseline/global/random/equal 的自动 WER 或 CER。
+- 说话人相似度评测。
+- 人工自然度 MOS。
+- 真实语音微调 checkpoint 和训练日志。
+- 配置锁定后的最终测试集裁剪结果。
 
-## 论文与来源
+在这些项目完成前，当前结果只能支持“结构化裁剪降低了参数量和端到端 RTF”，还不能支持“语音质量基本不变”或“激活选择优于随机选择”。
 
-- Chuan Wu et al. *Unveiling Multimodal Processing: Exploring Activation Patterns in Multimodal LLMs for Interpretability and Efficiency*. Findings of EMNLP 2025.
+## 参考
+
 - Yushen Chen et al. [F5-TTS: A Fairytaler that Fakes Fluent and Faithful Speech with Flow Matching](https://aclanthology.org/2025.acl-long.313/). ACL 2025.
-- Jaehyeon Kim et al. [Conditional Variational Autoencoder with Adversarial Learning for End-to-End Text-to-Speech](https://proceedings.mlr.press/v139/kim21f.html). ICML 2021.
-- Jungil Kong et al. [HiFi-GAN](https://proceedings.neurips.cc/paper/2020/hash/c5d736809766d46260d816d8dbc9eb44-Abstract.html). NeurIPS 2020.
+- Chuan Wu et al. *Unveiling Multimodal Processing: Exploring Activation Patterns in Multimodal LLMs for Interpretability and Efficiency*. Findings of EMNLP 2025.
+- [SWivid/F5-TTS](https://github.com/SWivid/F5-TTS)
 
-本仓库没有复制 F5-TTS 权重或源码；运行时通过其公开 Python API 调用，并保留清楚的上游归属。
+本仓库不包含 F5-TTS 模型权重和上游源码。
