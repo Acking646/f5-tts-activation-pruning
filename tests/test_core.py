@@ -13,6 +13,7 @@ from car_tts.backend import MockBackend
 from car_tts.benchmark import run_benchmark
 from car_tts.dataset import prepare_dataset
 from car_tts.experts import make_masks
+from car_tts.intelligibility import evaluate_intelligibility, transcript_errors
 from car_tts.mos import aggregate_ratings, create_trial_manifest
 
 
@@ -88,3 +89,30 @@ def test_mos_blinding_and_aggregation(tmp_path):
     result = aggregate_ratings(ratings, trials)
     assert result["baseline"]["mean"] == 4
     assert result["baseline"]["ci95_low"] == result["baseline"]["ci95_high"] == 4
+
+
+def test_transcript_errors_and_intelligibility_report(tmp_path):
+    errors = transcript_errors("Hello, world!", "hello word")
+    assert errors["word_errors"] == 1
+    assert errors["reference_words"] == 2
+    chinese = transcript_errors("你好，世界！", "你好世")
+    assert chinese["character_errors"] == 1
+    assert chinese["reference_characters"] == 4
+
+    manifest = tmp_path / "eval.jsonl"
+    manifest.write_text(
+        json.dumps({"id": "a", "text": "hello world"}) + "\n",
+        encoding="utf-8",
+    )
+    audio_dir = tmp_path / "system"
+    audio_dir.mkdir()
+    (audio_dir / "a-r0.wav").write_bytes(b"test")
+    output = tmp_path / "intelligibility.json"
+    report = evaluate_intelligibility(
+        manifest,
+        {"baseline": audio_dir},
+        lambda _: "hello word",
+        output,
+    )
+    assert report["systems"]["baseline"]["wer"] == 0.5
+    assert output.is_file()

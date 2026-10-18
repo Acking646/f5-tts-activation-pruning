@@ -7,6 +7,7 @@ from pathlib import Path
 from .backend import create_backend
 from .benchmark import format_summary, run_benchmark
 from .dataset import prepare_dataset
+from .intelligibility import WhisperTranscriber, evaluate_intelligibility
 from .mos import aggregate_ratings, create_trial_manifest
 
 
@@ -46,6 +47,17 @@ def main(argv=None):
     mos_aggregate.add_argument("ratings")
     mos_aggregate.add_argument("trials")
 
+    intelligibility = commands.add_parser(
+        "intelligibility", help="transcribe generated speech and compute WER/CER"
+    )
+    intelligibility.add_argument("manifest")
+    intelligibility.add_argument("--system", action="append", required=True, help="NAME=AUDIO_DIR")
+    intelligibility.add_argument("--output", required=True)
+    intelligibility.add_argument("--asr-model", default="openai/whisper-small")
+    intelligibility.add_argument("--language", default=None, help="Whisper language code, e.g. en or zh")
+    intelligibility.add_argument("--audio-pattern", default="{id}-r0.wav")
+    intelligibility.add_argument("--device", default=None, help="cpu, cuda, or cuda:N")
+
     for subcommand in (infer, benchmark):
         subcommand.add_argument("--backend", choices=("f5tts", "mock"), default="f5tts")
         subcommand.add_argument("--model", default="F5TTS_v1_Base")
@@ -71,8 +83,29 @@ def main(argv=None):
     elif args.command == "mos-create":
         systems = dict(item.split("=", 1) for item in args.system)
         result = {"trials": create_trial_manifest(systems, args.output, args.seed)}
-    else:
+    elif args.command == "mos-aggregate":
         result = aggregate_ratings(args.ratings, args.trials)
+    else:
+        systems = dict(item.split("=", 1) for item in args.system)
+        if len(systems) != len(args.system):
+            parser.error("--system names must be unique")
+        transcriber = WhisperTranscriber(args.asr_model, args.device, args.language)
+        result = evaluate_intelligibility(
+            args.manifest,
+            systems,
+            transcriber,
+            args.output,
+            args.audio_pattern,
+            metadata={
+                "asr_model": args.asr_model,
+                "language": args.language or "auto",
+                "device": args.device or "auto",
+            },
+        )
+        result = {
+            name: {"utterances": value["utterances"], "wer": value["wer"], "cer": value["cer"]}
+            for name, value in result["systems"].items()
+        }
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 

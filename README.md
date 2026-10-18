@@ -12,14 +12,14 @@
 
 测试环境：RTX 4060 Laptop GPU、Python 3.11.11、PyTorch 2.6.0+cu124、CUDA 12.4、F5-TTS v1 Base、Vocos、NFE 32。每组先预热 1 次，再把 10 条验证文本完整运行 3 轮。RTF 包含文本处理、声学模型、Vocos 和 WAV 写盘，不包含模型加载。
 
-| 配置 | FFN 实际保留率 | 总参数量 | 参数减少 | RTF（3 轮均值 ± 标准差） | 相对基线加速 |
-|---|---:|---:|---:|---:|---:|
-| 未裁剪基线 | 100% | 337,096,804 | 0% | 0.307948 ± 0.002683 | 1.000× |
-| global-90 | 89.99% | 327,851,716 | 2.743% | 0.300732 ± 0.000436 | 1.024× |
-| global-80 | 79.97% | 318,606,628 | 5.485% | 0.293995 ± 0.000737 | 1.047× |
-| global-70 | 70.03% | 309,427,108 | 8.208% | 0.286624 ± 0.001598 | 1.074× |
-| random-80 | 79.97% | 318,606,628 | 5.485% | 0.294057 ± 0.001029 | 1.047× |
-| equal-80 | 79.69% | 318,344,356 | 5.563% | 0.297101 ± 0.003921 | 1.037× |
+| 配置 | FFN 实际保留率 | 总参数量 | 参数减少 | RTF（3 轮均值 ± 标准差） | 相对基线加速 | WER/CER |
+|---|---:|---:|---:|---:|---:|---:|
+| 未裁剪基线 | 100% | 337,096,804 | 0% | 0.307948 ± 0.002683 | 1.000× | 待实测 |
+| global-90 | 89.99% | 327,851,716 | 2.743% | 0.300732 ± 0.000436 | 1.024× | 待实测 |
+| global-80 | 79.97% | 318,606,628 | 5.485% | 0.293995 ± 0.000737 | 1.047× | 待实测 |
+| global-70 | 70.03% | 309,427,108 | 8.208% | 0.286624 ± 0.001598 | 1.074× | 待实测 |
+| random-80 | 79.97% | 318,606,628 | 5.485% | 0.294057 ± 0.001029 | 1.047× | 待实测 |
+| equal-80 | 79.69% | 318,344,356 | 5.563% | 0.297101 ± 0.003921 | 1.037× | 待实测 |
 
 global 的保留率从 90% 降到 70% 时，参数量和 RTF 都单调下降。global-70 的端到端 RTF 比未裁剪基线低 6.92%，对应约 1.074 倍吞吐加速。
 
@@ -174,6 +174,42 @@ foreach ($retain in @(0.9, 0.7)) {
 }
 ```
 
+## 可懂度评测
+
+WER 和 CER 都通过 ASR 转写合成语音后计算。WER 按词统计，适合当前英文实验；CER 去掉空格和标点后按字符统计，更适合中文。所有系统必须使用同一个 ASR 模型和同一套文本规范化。
+
+下面的命令评测每个目录的 `*-r0.wav`，并把逐句识别文本和汇总指标保存到 `artifacts/intelligibility_validation.json`：
+
+```powershell
+car-tts intelligibility `
+  "data\validation_texts_en.jsonl" `
+  --system baseline="outputs\validation-baseline" `
+  --system global90="outputs\validation-global-90" `
+  --system global80="outputs\validation-global-80" `
+  --system global70="outputs\validation-global-70" `
+  --system random80="outputs\validation-random-80" `
+  --system equal80="outputs\validation-equal-80" `
+  --asr-model "openai/whisper-small.en" `
+  --language en `
+  --device cuda `
+  --output "artifacts\intelligibility_validation.json"
+```
+
+第一次运行会下载 Whisper 权重。网络较慢时可先在当前 PowerShell 会话设置代理：
+
+```powershell
+$env:HTTP_PROXY = "http://172.18.93.164:7897"
+$env:HTTPS_PROXY = "http://172.18.93.164:7897"
+```
+
+中文评测把 ASR 模型改为多语种版本，并指定中文：
+
+```powershell
+--asr-model "openai/whisper-small" --language zh
+```
+
+输出采用 micro-average：先汇总所有句子的编辑距离和参考长度，再计算总 WER/CER。文本统一做 Unicode NFKC、大小写折叠并移除标点和符号。ASR 指标会受识别模型本身影响，因此它适合在同一协议下比较系统，不应被当成人工 MOS 的替代品。
+
 ## 数据准备与微调
 
 自己的语音数据使用 JSONL 清单管理：
@@ -227,7 +263,7 @@ docs/
 
 ## 当前缺项
 
-- baseline/global/random/equal 的自动 WER 或 CER。
+- baseline/global/random/equal 的 WER/CER 实测结果（评测命令已提供）。
 - 说话人相似度评测。
 - 人工自然度 MOS。
 - 真实语音微调 checkpoint 和训练日志。
