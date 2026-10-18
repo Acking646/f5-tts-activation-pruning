@@ -207,6 +207,6 @@ car-tts prepare data\private\manifest.jsonl artifacts\dataset --seed 42
 3. 固定五类测试文本完成端到端 RTF。
 4. 数据清洗和 train/valid/test 划分可复核。
 5. 再进行微调，并与完全相同的 zero-shot 基线比较。
-6. 最后运行专家 profile、global/equal 裁剪和盲听评测。
+6. 最后运行专家 profile、global/equal/random 裁剪和语音质量评测。
 
 不要一开始就下载完整 Emilia，也不要在基线未跑通时同时排查微调、裁剪和 TensorRT。

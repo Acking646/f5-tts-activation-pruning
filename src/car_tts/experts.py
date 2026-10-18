@@ -8,6 +8,7 @@ matrices; merely applying a zero mask would not establish acceleration.
 """
 
 import json
+import random
 from pathlib import Path
 
 
@@ -128,7 +129,7 @@ class ExpertProfiler:
         }
 
 
-def make_masks(profile, retain_fraction=0.8, strategy="global"):
+def make_masks(profile, retain_fraction=0.8, strategy="global", seed=42):
     layers = profile["layers"]
     n_experts = profile["n_experts"]
     masks = {name: [False] * n_experts for name in layers}
@@ -138,7 +139,7 @@ def make_masks(profile, retain_fraction=0.8, strategy="global"):
             ranked = sorted(range(n_experts), key=lambda index: value["activation_counts"][index], reverse=True)
             for index in ranked[:keep]:
                 masks[name][index] = True
-    elif strategy == "global":
+    elif strategy in ("global", "random"):
         ranked = sorted(((count, name, index) for name, value in layers.items()
                          for index, count in enumerate(value["activation_counts"])), reverse=True)
         keep = max(len(layers), round(len(ranked) * retain_fraction))
@@ -148,8 +149,16 @@ def make_masks(profile, retain_fraction=0.8, strategy="global"):
             if not any(masks[name]):
                 best = max(range(n_experts), key=lambda index: value["activation_counts"][index])
                 masks[name][best] = True
+        if strategy == "random":
+            generator = random.Random(seed)
+            matched = {}
+            for name, global_mask in masks.items():
+                layer_keep = sum(global_mask)
+                selected = set(generator.sample(range(n_experts), layer_keep))
+                matched[name] = [index in selected for index in range(n_experts)]
+            masks = matched
     else:
-        raise ValueError("strategy must be global or equal")
+        raise ValueError("strategy must be global, equal, or random")
     return masks
 
 
@@ -187,4 +196,3 @@ def structurally_prune(model, profile, masks):
 def load_profile(path):
     with Path(path).open("r", encoding="utf-8") as handle:
         return json.load(handle)
-

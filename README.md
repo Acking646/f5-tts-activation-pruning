@@ -4,9 +4,9 @@
 
 ![F5-TTS Activation-Guided Structured Pruning](docs/assets/f5_tts_activation_pruning_framework.png)
 
-图 1：本项目框架。左侧复现 F5-TTS 推理并采集 DiT FFN 的 post-GELU 激活；中间完成平衡专家聚类与跨层频率统计；右侧比较 global/equal 结构化裁剪，并在相同测试条件下联合报告 RTF 与语音质量。该图依据本仓库实现重绘，不代表 F5-TTS 原论文的实验结论。
+图 1：本项目框架。左侧复现 F5-TTS 推理并采集 DiT FFN 的 post-GELU 激活；中间完成平衡专家聚类与跨层频率统计；右侧比较 global/equal/random 结构化裁剪，并在相同测试条件下联合报告 RTF 与语音质量。该图依据本仓库实现重绘，不代表 F5-TTS 原论文的实验结论。
 
-> 当前仓库已经完成工程实现和无权重单元测试；尚未在本机完成 GPU 微调、正式 RTF 或人工 MOS，因此不提供虚构结果。真实数值应由固定数据、权重和硬件运行后提交到 `docs/RESULTS.md`。
+> 当前仓库已经完成工程实现、单元测试和本机 GPU 基线/裁剪验证集 RTF；尚未完成 GPU 微调、客观语音质量评测或人工 MOS。已测数值和未完成边界见 `docs/RESULTS.md`。
 
 ## 为什么选 F5-TTS
 
@@ -28,7 +28,7 @@ F5-TTS 论文报告的是论文设置结果，官方仓库也列出 PyTorch 与 
 - 严谨 RTF：预热、CUDA 同步、逐条 latency/音频时长、总耗时除以总音频时长、软硬件环境快照。
 - 可复核 MOS：生成匿名随机 trial，校验 1–5 自然度评分，汇总评分数、听者数、均值和标准差。
 - 论文迁移：对 F5-TTS DiT FFN 第一投影权重做平衡 K-means，记录 GELU 后专家激活并进行层内 Z-score、跨层 top-K。
-- 两个裁剪对照：`global` 跨层非均匀保留和 `equal` 每层等比例保留。
+- 三个裁剪策略：`global` 跨层非均匀保留、`equal` 每层等比例保留，以及与 global 逐层宽度匹配的 `random` 随机对照。
 - 结构化裁剪：同时缩小 FFN 的两层线性矩阵，实际减少参数和矩阵乘；不把零掩码或“活跃参数下降”冒充真实加速。
 - 完整产物：profile、mask、逐条 benchmark、固定测试文本、盲听原始记录和结果表模板。
 
@@ -39,7 +39,7 @@ src/car_tts/
   backend.py       # F5-TTS/CI mock 后端
   dataset.py       # 清洗、分组划分、F5 metadata.csv
   benchmark.py     # 端到端 RTF
-  experts.py       # 平衡聚类、激活统计、global/equal 结构化裁剪
+  experts.py       # 平衡聚类、激活统计、global/equal/random 结构化裁剪
   mos.py           # 盲听 trial 与汇总
 scripts/
   finetune.ps1
@@ -138,6 +138,10 @@ python scripts/prune_benchmark.py \
 python scripts/prune_benchmark.py \
   artifacts/expert_profile.json data/eval_texts.jsonl outputs/pruned-equal \
   --retain 0.80 --strategy equal --warmup 1 --repeats 3
+
+python scripts/prune_benchmark.py \
+  artifacts/expert_profile.json data/eval_texts.jsonl outputs/pruned-random \
+  --retain 0.80 --strategy random --warmup 1 --repeats 3 --seed 42
 ```
 
 必须再与未裁剪基线比较 CER/WER、说话人相似度和盲听。若 RTF 未下降，应如实分析 attention、ODE、声码器、kernel shape 与 I/O 占比；不能只依据参数量得出“推理加速”。结构裁剪后的 `state_dict` 需要配套裁剪结构才能重新加载，不能直接塞回官方原始配置。

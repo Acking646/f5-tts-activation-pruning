@@ -26,6 +26,6 @@ RTF 的三次输出不应全部进入 MOS，否则同一句近似重复音频会
 
 F5-TTS DiT 每个 FFN 的第一线性层神经元按权重余弦空间做平衡 K-means；每个专家包含相同神经元数。记录 GELU 后激活，对每层专家分数做 Z-score，再跨层选 top-K。与原论文不同，当前实现按一次扩散调用中的 token/ODE step 汇总，并没有把“文本模态/音频模态”当成两个独立输入模态。
 
-专家 profile 必须使用独立校准清单，不能使用最终 RTF/MOS 测试清单。本仓库英文实验使用 `data/profile_texts_en.jsonl` 做激活统计，使用 `data/validation_texts_en.jsonl` 选择保留率和策略，配置锁定后才在 `data/eval_texts_en.jsonl` 上做一次最终测试；后续中文正式实验也应保持同样的 profile/validation/test 隔离。聚类和 profile 固定一次后，所有保留率与 equal/global 策略共享同一个 profile，避免为每个结果重新挑选专家。
+专家 profile 必须使用独立校准清单，不能使用最终 RTF/MOS 测试清单。本仓库英文实验使用 `data/profile_texts_en.jsonl` 做激活统计，使用 `data/validation_texts_en.jsonl` 选择保留率和策略，配置锁定后才在 `data/eval_texts_en.jsonl` 上做一次最终测试；后续中文正式实验也应保持同样的 profile/validation/test 隔离。聚类和 profile 固定一次后，所有保留率与 equal/global/random 策略共享同一个 profile，避免为每个结果重新挑选专家。
 
-裁剪使用两种策略：每层等比例（equal）与跨层全局（global）。结构化裁剪同时缩小 FFN 输入投影的输出维和输出投影的输入维，因此确实减少 FFN 参数和矩阵乘法；但 attention、ODE 步数、声码器与 I/O 不变。结论必须同时给出参数量、RTF 和质量退化。
+裁剪使用三种策略：每层等比例激活裁剪（equal）、跨层全局激活裁剪（global），以及层宽匹配随机裁剪（random）。random 先取得 global 在每层的保留专家数量，再以固定 seed 在相应层随机选择同样数量的专家，因此参数量、矩阵形状和逐层宽度均与 global 相同，只移除激活排序这一因素。结构化裁剪同时缩小 FFN 输入投影的输出维和输出投影的输入维，因此确实减少 FFN 参数和矩阵乘法；但 attention、ODE 步数、声码器与 I/O 不变。结论必须同时给出参数量、RTF 和质量退化。

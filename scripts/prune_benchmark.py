@@ -24,7 +24,7 @@ def main():
     parser.add_argument("--vocoder", default="", help="local Vocos directory")
     parser.add_argument("--device", default=None)
     parser.add_argument("--retain", type=float, default=0.8)
-    parser.add_argument("--strategy", choices=("global", "equal"), default="global")
+    parser.add_argument("--strategy", choices=("global", "equal", "random"), default="global")
     parser.add_argument("--warmup", type=int, default=1)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--nfe-step", type=int, default=32)
@@ -36,7 +36,7 @@ def main():
 
     backend = F5Backend(args.model, args.checkpoint, args.vocab, args.vocoder, args.device)
     profile = load_profile(args.profile)
-    masks = make_masks(profile, args.retain, args.strategy)
+    masks = make_masks(profile, args.retain, args.strategy, args.seed)
     pruning = structurally_prune(backend.torch_model, profile, masks)
     output_dir = Path(args.output)
     result = run_benchmark(backend, args.manifest, output_dir, args.warmup, args.repeats,

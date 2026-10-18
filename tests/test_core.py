@@ -67,6 +67,11 @@ def test_masks_support_global_and_equal():
     assert sum(equal["a"]) == sum(equal["b"]) == 2
     global_masks = make_masks(profile, 0.5, "global")
     assert any(global_masks["a"]) and any(global_masks["b"])
+    random_masks = make_masks(profile, 0.5, "random", seed=42)
+    assert random_masks == make_masks(profile, 0.5, "random", seed=42)
+    assert {name: sum(mask) for name, mask in random_masks.items()} == {
+        name: sum(mask) for name, mask in global_masks.items()
+    }
 
 
 def test_mos_blinding_and_aggregation(tmp_path):
