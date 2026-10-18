@@ -7,7 +7,7 @@ import statistics
 import time
 
 from .audio import wav_duration
-from .io import atomic_json, read_jsonl
+from .io import atomic_json, read_jsonl, write_jsonl
 
 
 def _sync_device():
@@ -71,6 +71,31 @@ def run_benchmark(backend, manifest, output_dir, warmup=1, repeats=3, seed=42, n
 
     total_latency = sum(row["latency_s"] for row in rows)
     total_audio = sum(row["audio_duration_s"] for row in rows)
+    repeat_summaries = []
+    for repeat in range(repeats):
+        repeat_rows = [row for row in rows if row["repeat"] == repeat]
+        repeat_latency = sum(row["latency_s"] for row in repeat_rows)
+        repeat_audio = sum(row["audio_duration_s"] for row in repeat_rows)
+        repeat_summaries.append({
+            "repeat": repeat,
+            "latency_s": repeat_latency,
+            "audio_duration_s": repeat_audio,
+            "aggregate_rtf": repeat_latency / repeat_audio,
+        })
+    repeat_rtfs = [row["aggregate_rtf"] for row in repeat_summaries]
+    per_case = []
+    for case in cases:
+        case_rows = [row for row in rows if row["id"] == case["id"]]
+        case_rtfs = [row["rtf"] for row in case_rows]
+        per_case.append({
+            "id": case["id"],
+            "category": case.get("category", "unspecified"),
+            "text": case["text"],
+            "mean_latency_s": statistics.mean(row["latency_s"] for row in case_rows),
+            "mean_audio_duration_s": statistics.mean(row["audio_duration_s"] for row in case_rows),
+            "mean_rtf": statistics.mean(case_rtfs),
+            "stdev_rtf": statistics.stdev(case_rtfs) if len(case_rtfs) > 1 else 0.0,
+        })
     result = {
         "protocol": {
             "scope": "end_to_end_excluding_model_load_including_wav_write",
@@ -84,10 +109,18 @@ def run_benchmark(backend, manifest, output_dir, warmup=1, repeats=3, seed=42, n
             "total_audio_duration_s": total_audio,
             "aggregate_rtf": total_latency / total_audio,
             "median_item_rtf": statistics.median(row["rtf"] for row in rows),
+            "repeat_mean_rtf": statistics.mean(repeat_rtfs),
+            "repeat_stdev_rtf": statistics.stdev(repeat_rtfs) if len(repeat_rtfs) > 1 else 0.0,
         },
+        "repeats": repeat_summaries,
+        "per_case": per_case,
         "items": rows,
     }
     atomic_json(output_dir / "benchmark.json", result)
+    write_jsonl(output_dir / "mos_samples.jsonl", [
+        {"id": row["id"], "text": row["text"], "audio": row["output"]}
+        for row in rows if row["repeat"] == 0
+    ])
     return result
 
 
@@ -108,4 +141,3 @@ def environment_info():
 def format_summary(result):
     summary = result["summary"]
     return json.dumps(summary, ensure_ascii=False, indent=2)
-

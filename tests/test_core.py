@@ -36,6 +36,10 @@ def test_benchmark_aggregate_rtf(tmp_path):
     assert summary["samples"] == 2
     assert math.isclose(summary["aggregate_rtf"], summary["total_latency_s"] /
                         summary["total_audio_duration_s"])
+    assert len(result["repeats"]) == 2
+    assert result["per_case"][0]["id"] == "a"
+    assert "repeat_mean_rtf" in summary and "repeat_stdev_rtf" in summary
+    assert (tmp_path / "out" / "mos_samples.jsonl").is_file()
     assert wav_duration(result["items"][0]["output"]) > 0
 
 
@@ -78,4 +82,4 @@ def test_mos_blinding_and_aggregation(tmp_path):
         writer.writerow({"listener_id": "l1", "trial_id": trial["trial_id"], "naturalness": 4})
     result = aggregate_ratings(ratings, trials)
     assert result["baseline"]["mean"] == 4
-
+    assert result["baseline"]["ci95_low"] == result["baseline"]["ci95_high"] == 4

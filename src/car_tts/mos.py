@@ -2,6 +2,7 @@
 
 import csv
 import hashlib
+import math
 import random
 from pathlib import Path
 import statistics
@@ -42,8 +43,18 @@ def aggregate_ratings(ratings_csv, trials_jsonl):
             if not 1 <= score <= 5:
                 raise ValueError("MOS rating must be in [1, 5]")
             values.setdefault(trials[trial]["system"], []).append(score)
-    return {system: {
-        "ratings": len(scores), "listeners": len({listener for listener, trial in listener_trials if trials[trial]["system"] == system}),
-        "mean": statistics.mean(scores), "stdev": statistics.stdev(scores) if len(scores) > 1 else 0.0,
-    } for system, scores in values.items()}
-
+    result = {}
+    for system, scores in values.items():
+        mean = statistics.mean(scores)
+        stdev = statistics.stdev(scores) if len(scores) > 1 else 0.0
+        margin = 1.96 * stdev / math.sqrt(len(scores)) if len(scores) > 1 else 0.0
+        result[system] = {
+            "ratings": len(scores),
+            "listeners": len({listener for listener, trial in listener_trials
+                              if trials[trial]["system"] == system}),
+            "mean": mean,
+            "stdev": stdev,
+            "ci95_low": max(1.0, mean - margin),
+            "ci95_high": min(5.0, mean + margin),
+        }
+    return result
