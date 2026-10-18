@@ -2,6 +2,10 @@
 
 基于 **F5-TTS v1** 的真实语音复现、微调、推理评测与激活引导结构化裁剪项目。它把 EMNLP 2025 Findings 论文 *Unveiling Multimodal Processing: Exploring Activation Patterns in Multimodal LLMs for Interpretability and Efficiency* 中“稠密 FFN → 细粒度专家 → 激活频率 → 全局非均匀裁剪”的思路迁移到 TTS DiT，并把结果约束在可复核的 RTF、质量和盲听协议上。
 
+![F5-TTS Activation-Guided Structured Pruning](docs/assets/f5_tts_activation_pruning_framework.png)
+
+图 1：本项目框架。左侧复现 F5-TTS 推理并采集 DiT FFN 的 post-GELU 激活；中间完成平衡专家聚类与跨层频率统计；右侧比较 global/equal 结构化裁剪，并在相同测试条件下联合报告 RTF 与语音质量。该图依据本仓库实现重绘，不代表 F5-TTS 原论文的实验结论。
+
 > 当前仓库已经完成工程实现和无权重单元测试；尚未在本机完成 GPU 微调、正式 RTF 或人工 MOS，因此不提供虚构结果。真实数值应由固定数据、权重和硬件运行后提交到 `docs/RESULTS.md`。
 
 ## 为什么选 F5-TTS
