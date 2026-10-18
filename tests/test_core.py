@@ -98,6 +98,12 @@ def test_transcript_errors_and_intelligibility_report(tmp_path):
     chinese = transcript_errors("你好，世界！", "你好世")
     assert chinese["character_errors"] == 1
     assert chinese["reference_characters"] == 4
+    normalized = transcript_errors(
+        "eight minutes",
+        "8 minutes",
+        lambda text: text.replace("8", "eight"),
+    )
+    assert normalized["word_errors"] == 0
 
     manifest = tmp_path / "eval.jsonl"
     manifest.write_text(

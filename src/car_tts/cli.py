@@ -100,7 +100,9 @@ def main(argv=None):
                 "asr_model": args.asr_model,
                 "language": args.language or "auto",
                 "device": args.device or "auto",
+                "normalization": transcriber.normalizer_name,
             },
+            text_normalizer=transcriber.normalize_text,
         )
         result = {
             name: {"utterances": value["utterances"], "wer": value["wer"], "cer": value["cer"]}

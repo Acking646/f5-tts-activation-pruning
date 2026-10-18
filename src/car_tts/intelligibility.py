@@ -41,7 +41,10 @@ def edit_distance(reference, hypothesis):
     return previous[-1]
 
 
-def transcript_errors(reference, hypothesis):
+def transcript_errors(reference, hypothesis, text_normalizer=None):
+    if text_normalizer is not None:
+        reference = text_normalizer(reference)
+        hypothesis = text_normalizer(hypothesis)
     ref_words, hyp_words = word_tokens(reference), word_tokens(hypothesis)
     ref_characters, hyp_characters = character_tokens(reference), character_tokens(hypothesis)
     return {
@@ -84,6 +87,14 @@ class WhisperTranscriber:
         elif language and language.lower() not in ("en", "english"):
             raise ValueError("an English-only Whisper model cannot transcribe language %s" % language)
 
+        english = not is_multilingual or (language and language.lower() in ("en", "english"))
+        if english:
+            self.normalize_text = self.processor.tokenizer.normalize
+            self.normalizer_name = "whisper_english"
+        else:
+            self.normalize_text = self.processor.tokenizer.basic_normalize
+            self.normalizer_name = "whisper_basic"
+
     def __call__(self, audio_path):
         from torchaudio.functional import resample
 
@@ -109,7 +120,7 @@ class WhisperTranscriber:
 
 
 def evaluate_intelligibility(manifest, systems, transcribe, output, audio_pattern="{id}-r0.wav",
-                             metadata=None):
+                             metadata=None, text_normalizer=None):
     """Transcribe matching system outputs and compute micro-averaged WER/CER."""
     cases = list(read_jsonl(manifest))
     if not cases:
@@ -141,7 +152,7 @@ def evaluate_intelligibility(manifest, systems, transcribe, output, audio_patter
                 raise FileNotFoundError("missing audio for %s/%s: %s" %
                                         (system_name, case_id, audio))
             hypothesis = transcribe(audio)
-            errors = transcript_errors(reference, hypothesis)
+            errors = transcript_errors(reference, hypothesis, text_normalizer)
             for key in totals:
                 totals[key] += errors[key]
             per_case.append({
