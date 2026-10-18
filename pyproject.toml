@@ -13,7 +13,7 @@ authors = [{name = "Acking646"}]
 dependencies = []
 
 [project.optional-dependencies]
-tts = ["f5-tts>=1.1.17", "torch>=2.1", "soundfile>=0.12", "numpy>=1.26", "tqdm>=4.66"]
+tts = ["f5-tts==1.1.16", "torch>=2.1", "soundfile>=0.12", "numpy>=1.26", "tqdm>=4.66"]
 test = ["pytest>=8", "ruff>=0.8"]
 
 [project.scripts]
@@ -28,4 +28,3 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 110
 target-version = "py310"
-

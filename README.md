@@ -59,6 +59,8 @@ docs/
 
 建议 Linux + Python 3.10/3.11 + NVIDIA GPU；先按自己的 CUDA 版本安装 PyTorch，再安装本项目。
 
+当前 Windows + RTX 4060 Laptop 的逐步安装、模型下载、参考音频和微调数据准备见 [`docs/BASELINE_SETUP.md`](docs/BASELINE_SETUP.md)。
+
 ```bash
 git clone https://github.com/Acking646/f5-tts-activation-pruning.git
 cd f5-tts-activation-pruning
