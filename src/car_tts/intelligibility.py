@@ -53,31 +53,59 @@ def transcript_errors(reference, hypothesis):
 
 
 class WhisperTranscriber:
-    """Lazy Transformers Whisper pipeline wrapper."""
+    """Whisper wrapper that decodes WAV without Transformers' torchcodec path."""
 
     def __init__(self, model, device=None, language=None):
+        import soundfile
         import torch
-        from transformers import pipeline
+        from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         if str(device).startswith("cuda") and not torch.cuda.is_available():
             raise RuntimeError("CUDA was requested but torch.cuda.is_available() is false")
 
-        dtype = torch.float16 if str(device).startswith("cuda") else torch.float32
-        self.pipeline = pipeline(
-            "automatic-speech-recognition",
-            model=model,
-            device=device,
-            dtype=dtype,
-        )
-        self.generate_kwargs = {"task": "transcribe"}
-        if language:
-            self.generate_kwargs["language"] = language
+        self.torch = torch
+        self.soundfile = soundfile
+        self.device = torch.device(device)
+        self.dtype = torch.float16 if self.device.type == "cuda" else torch.float32
+        self.processor = AutoProcessor.from_pretrained(model)
+        self.model = AutoModelForSpeechSeq2Seq.from_pretrained(model, dtype=self.dtype)
+        self.model.to(self.device)
+        self.model.eval()
+        self.sampling_rate = self.processor.feature_extractor.sampling_rate
+
+        is_multilingual = getattr(self.model.generation_config, "is_multilingual", True)
+        self.generate_kwargs = {}
+        if is_multilingual:
+            self.generate_kwargs["task"] = "transcribe"
+            if language:
+                self.generate_kwargs["language"] = language
+        elif language and language.lower() not in ("en", "english"):
+            raise ValueError("an English-only Whisper model cannot transcribe language %s" % language)
 
     def __call__(self, audio_path):
-        result = self.pipeline(str(audio_path), generate_kwargs=self.generate_kwargs)
-        return result["text"].strip()
+        from torchaudio.functional import resample
+
+        audio, sampling_rate = self.soundfile.read(
+            str(audio_path), dtype="float32", always_2d=True
+        )
+        waveform = self.torch.from_numpy(audio.mean(axis=1))
+        if sampling_rate != self.sampling_rate:
+            waveform = resample(waveform, sampling_rate, self.sampling_rate)
+        inputs = self.processor(
+            waveform.numpy(),
+            sampling_rate=self.sampling_rate,
+            return_attention_mask=True,
+            return_tensors="pt",
+        )
+        input_features = inputs.input_features.to(self.device, dtype=self.dtype)
+        generate_kwargs = dict(self.generate_kwargs)
+        if "attention_mask" in inputs:
+            generate_kwargs["attention_mask"] = inputs.attention_mask.to(self.device)
+        with self.torch.inference_mode():
+            predicted_ids = self.model.generate(input_features, **generate_kwargs)
+        return self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0].strip()
 
 
 def evaluate_intelligibility(manifest, systems, transcribe, output, audio_pattern="{id}-r0.wav",
