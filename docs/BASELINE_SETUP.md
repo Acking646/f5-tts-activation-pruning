@@ -30,14 +30,15 @@ python -m pip install --upgrade pip setuptools wheel
 当前 566.24 驱动不建议直接使用官方示例中的 CUDA 12.8 wheel。先使用 F5-TTS README 同样列出的 CUDA 12.4 路线：
 
 ```powershell
-python -m pip install torch==2.6.0 torchaudio==2.6.0 `
+python -m pip install torch==2.6.0 torchaudio==2.6.0 torchvision==0.21.0 `
   --index-url https://download.pytorch.org/whl/cu124
-python -m pip install --force-reinstall numpy==2.2.6
+python -m pip install --force-reinstall numpy==2.2.6 pandas==2.2.3 `
+  transformers==4.57.6 "packaging<25" "protobuf<7"
 cd C:\Users\LENOVO\Desktop\tts\code
 python -m pip install -e ".[tts]"
 ```
 
-当前 Transformers 要求 PyTorch 2.6 或更高，而当前 PyArrow wheel 要求 NumPy 2.x。这里将兼容组合固定为 PyTorch/Torchaudio 2.6.0 + CUDA 12.4、NumPy 2.2.6；不要与 PyTorch 2.4 + NumPy 1.26 的旧组合混用。
+这里将兼容组合固定为 PyTorch/Torchaudio 2.6.0 + CUDA 12.4、Transformers 4.57.6、NumPy 2.2.6 和 Pandas 2.2.3。Transformers 暂不使用 5.x，以兼容 Sentence Transformers 4.x；Pandas 1.5.x 的 Windows wheel 也不要与 NumPy 2.x 混用。
 
 验证环境：
 
