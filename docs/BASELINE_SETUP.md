@@ -32,9 +32,12 @@ python -m pip install --upgrade pip setuptools wheel
 ```powershell
 python -m pip install torch==2.4.0+cu124 torchaudio==2.4.0+cu124 `
   --extra-index-url https://download.pytorch.org/whl/cu124
+python -m pip install --force-reinstall numpy==1.26.4
 cd C:\Users\LENOVO\Desktop\tts\code
 python -m pip install -e ".[tts]"
 ```
+
+PyTorch 2.4.0 的 Windows wheel 使用 NumPy 1.x ABI；若环境中已有 NumPy 2.x，会出现 `_ARRAY_API not found`。这里显式固定 1.26.4，避免导入警告和潜在崩溃。
 
 验证环境：
 
