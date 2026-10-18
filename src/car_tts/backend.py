@@ -7,12 +7,18 @@ import wave
 
 
 class F5Backend:
-    def __init__(self, model="F5TTS_v1_Base", checkpoint="", device=None):
+    def __init__(self, model="F5TTS_v1_Base", checkpoint="", vocab="", vocoder="", device=None):
         try:
             from f5_tts.api import F5TTS
         except ImportError as exc:
             raise RuntimeError("Install the real runtime with: pip install -e .[tts]") from exc
-        options = {"model": model, "ckpt_file": checkpoint}
+        options = {"model": model}
+        if checkpoint:
+            options["ckpt_file"] = checkpoint
+        if vocab:
+            options["vocab_file"] = vocab
+        if vocoder:
+            options["vocoder_local_path"] = vocoder
         if device:
             options["device"] = device
         self.engine = F5TTS(**options)
@@ -60,4 +66,3 @@ def create_backend(name, **options):
     if name == "mock":
         return MockBackend()
     raise ValueError("unknown backend: %s" % name)
-

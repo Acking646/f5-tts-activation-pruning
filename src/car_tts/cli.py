@@ -11,7 +11,8 @@ from .mos import aggregate_ratings, create_trial_manifest
 
 
 def _backend_options(args):
-    return {"model": args.model, "checkpoint": args.checkpoint, "device": args.device}
+    return {"model": args.model, "checkpoint": args.checkpoint, "vocab": args.vocab,
+            "vocoder": args.vocoder, "device": args.device}
 
 
 def main(argv=None):
@@ -49,6 +50,8 @@ def main(argv=None):
         subcommand.add_argument("--backend", choices=("f5tts", "mock"), default="f5tts")
         subcommand.add_argument("--model", default="F5TTS_v1_Base")
         subcommand.add_argument("--checkpoint", default="")
+        subcommand.add_argument("--vocab", default="", help="local F5-TTS vocab.txt")
+        subcommand.add_argument("--vocoder", default="", help="local Vocos directory")
         subcommand.add_argument("--device", default=None)
         subcommand.add_argument("--seed", type=int, default=42)
 
@@ -76,4 +79,3 @@ def main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

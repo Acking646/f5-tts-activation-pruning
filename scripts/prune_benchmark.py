@@ -20,6 +20,8 @@ def main():
     parser.add_argument("output")
     parser.add_argument("--model", default="F5TTS_v1_Base")
     parser.add_argument("--checkpoint", default="")
+    parser.add_argument("--vocab", default="")
+    parser.add_argument("--vocoder", default="", help="local Vocos directory")
     parser.add_argument("--device", default=None)
     parser.add_argument("--retain", type=float, default=0.8)
     parser.add_argument("--strategy", choices=("global", "equal"), default="global")
@@ -32,7 +34,7 @@ def main():
     if not 0 < args.retain <= 1:
         parser.error("--retain must be in (0, 1]")
 
-    backend = F5Backend(args.model, args.checkpoint, args.device)
+    backend = F5Backend(args.model, args.checkpoint, args.vocab, args.vocoder, args.device)
     profile = load_profile(args.profile)
     masks = make_masks(profile, args.retain, args.strategy)
     pruning = structurally_prune(backend.torch_model, profile, masks)
@@ -52,4 +54,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

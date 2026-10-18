@@ -125,7 +125,9 @@ f5-tts_infer-cli --model F5TTS_v1_Base `
 
 ```powershell
 car-tts benchmark data\eval_texts.jsonl outputs\baseline `
-  --warmup 1 --repeats 3 --nfe-step 32 --seed 42
+  --checkpoint checkpoints\F5TTS_v1_Base\model_1250000.safetensors `
+  --vocab checkpoints\F5TTS_v1_Base\vocab.txt `
+  --warmup 1 --repeats 3 --nfe-step 32 --seed 42 --device cuda
 ```
 
 检查：

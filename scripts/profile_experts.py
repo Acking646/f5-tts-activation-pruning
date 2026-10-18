@@ -18,6 +18,8 @@ def main():
     parser.add_argument("output")
     parser.add_argument("--model", default="F5TTS_v1_Base")
     parser.add_argument("--checkpoint", default="")
+    parser.add_argument("--vocab", default="")
+    parser.add_argument("--vocoder", default="", help="local Vocos directory")
     parser.add_argument("--device", default=None)
     parser.add_argument("--experts", type=int, default=64)
     parser.add_argument("--top-fraction", type=float, default=0.2)
@@ -25,7 +27,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
-    backend = F5Backend(args.model, args.checkpoint, args.device)
+    backend = F5Backend(args.model, args.checkpoint, args.vocab, args.vocoder, args.device)
     profiler = ExpertProfiler(backend.torch_model, args.experts, args.top_fraction, args.seed)
     output_dir = Path(args.output).parent / "profile_audio"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -40,6 +42,8 @@ def main():
         profiler.close()
     result = profiler.result()
     result["provenance"] = {"model": args.model, "checkpoint": args.checkpoint or "official_default",
+                            "vocab": args.vocab or "official_default",
+                            "vocoder": args.vocoder or "huggingface_cache",
                             "manifest": str(Path(args.manifest).resolve()), "samples": len(cases),
                             "seed": args.seed, "nfe_step": args.nfe_step}
     atomic_json(args.output, result)
@@ -49,4 +53,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
